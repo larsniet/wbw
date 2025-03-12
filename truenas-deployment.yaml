@@ -17,7 +17,7 @@ spec:
       - name: bot
         image: ghcr.io/larsniet/wbw:main
         env:
-        - name: BOT_TOKEN
+        - name: TELEGRAM_BOT_TOKEN
           valueFrom:
             secretKeyRef:
               name: bot-secrets

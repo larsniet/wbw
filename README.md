@@ -27,7 +27,7 @@ cd <repository-name>
 
 2. Create a `.env` file with your Telegram Bot Token:
 ```bash
-BOT_TOKEN=your_telegram_bot_token_here
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 ```
 
 3. Build and run the container using Docker Compose:
