@@ -35,10 +35,10 @@ class PageMonitor:
         """Initialize cloudscraper session."""
         self.scraper = cloudscraper.create_scraper(
             browser={
-                'browser': 'chrome',
+                'custom_browser': 'chrome',
                 'platform': 'windows',
-                'mobile': False,
-                'custom': {
+                'desktop': True,
+                'headers': {
                     'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
                     'accept-language': 'en-US,en;q=0.9',
                     'upgrade-insecure-requests': '1',
