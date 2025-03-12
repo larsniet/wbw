@@ -65,6 +65,12 @@ class PageMonitor:
                 return False, {}, f"Failed to initialize scraper: {str(e)}"
 
         try:
+            # First check our IP address
+            logger.info("Checking server IP address...")
+            ip_response = self.scraper.get('https://api.ipify.org?format=json', timeout=5)
+            ip_data = ip_response.json()
+            logger.info(f"Server IP address: {ip_data['ip']}")
+
             logger.info(f"Loading {url}")
             response = self.scraper.get(
                 url, 
@@ -81,6 +87,11 @@ class PageMonitor:
                     'sec-fetch-user': '?1'
                 }
             )
+            # Add detailed logging of the response
+            logger.info(f"Response status code: {response.status_code}")
+            logger.info(f"Response headers: {dict(response.headers)}")
+            logger.info(f"Response content preview: {response.text[:500]}")  # First 500 chars of response
+            
             response.raise_for_status()
             
             if self.should_stop:
