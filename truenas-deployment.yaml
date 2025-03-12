@@ -1,0 +1,81 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telegram-button-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: telegram-button-monitor
+  template:
+    metadata:
+      labels:
+        app: telegram-button-monitor
+    spec:
+      containers:
+      - name: bot
+        image: ghcr.io/larsniet/wbw:main
+        env:
+        - name: BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: bot-secrets
+              key: bot-token
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: telegram-bot-data
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: watchtower
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: watchtower
+  template:
+    metadata:
+      labels:
+        app: watchtower
+    spec:
+      containers:
+      - name: watchtower
+        image: containrrr/watchtower
+        args: ["--interval", "300"]
+        volumeMounts:
+        - name: docker-socket
+          mountPath: /var/run/docker.sock
+      volumes:
+      - name: docker-socket
+        hostPath:
+          path: /var/run/docker.sock
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: telegram-bot-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bot-secrets
+type: Opaque
+stringData:
+  bot-token: "YOUR_BOT_TOKEN" 
