@@ -1,10 +1,10 @@
-# Button Monitor Telegram Bot
+# Element Monitor Telegram Bot
 
-A Telegram bot that monitors web pages for button text changes. The bot can handle multiple users (up to 2 concurrent sessions) and will notify users when button text changes on their monitored pages.
+A Telegram bot that monitors web pages for element text changes. The bot can handle multiple users (up to 5 concurrent sessions) and will notify users when element text changes or elements disappear on their monitored pages.
 
 ## Features
 
-- Monitor web pages for button text changes
+- Monitor web pages for element text changes
 - Support for multiple CSS selectors
 - Fixed 60-second refresh interval
 - Automatic session timeout after 12 hours
@@ -41,9 +41,10 @@ docker-compose up --build
 2. Send the `/start` command to begin setting up monitoring
 3. Follow the bot's prompts to provide:
    - The URL to monitor
-   - CSS selector(s) for the button(s) to watch (one per line)
+   - CSS selector(s) for the element(s) to watch (one per line)
 4. The bot will start monitoring and notify you when:
-   - Any button text changes
+   - Any element text changes
+   - Any elements disappear
    - An error occurs
    - The 12-hour monitoring period ends
 
@@ -78,7 +79,7 @@ http://localhost:8080/health
 
 The bot will automatically stop monitoring and notify users when:
 - The page becomes unreachable
-- Button selectors are not found
+- Element selectors are not found
 - Cloudflare challenges cannot be bypassed
 - Any other error occurs during monitoring
 

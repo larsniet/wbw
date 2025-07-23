@@ -95,7 +95,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return URL
 
 async def url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Store the URL and ask for button selectors."""
+    """Store the URL and ask for element selectors."""
     chat_id = update.effective_chat.id
     url = update.message.text
     logger.info(f"User {chat_id} provided URL: {url}")
@@ -104,11 +104,11 @@ async def url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     logger.info(f"Stored URL for user {chat_id}")
     
     await update.message.reply_text(
-        "Great! Now send me the CSS selector(s) for the button(s) you want to monitor. "
+        "Great! Now send me the CSS selector(s) for the element(s) you want to monitor. "
         "You can send multiple selectors, one per line.\n\n"
         "Examples:\n"
-        "- For elements with ID: #my-button\n"
-        "- For elements with class: .submit-button\n"
+        "- For elements with ID: #my-element\n"
+        "- For elements with class: .status-text\n"
         "- For specific elements: button[type='submit']"
     )
     return SELECTORS
@@ -130,21 +130,21 @@ async def selectors(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_info = user_data[chat_id]
     logger.info(f"Starting session for user {chat_id} with data: {user_info}")
     
-    # Send acknowledgment message about which buttons we're looking for
-    button_list = "\n".join([f"- {s}" for s in raw_selectors])
+    # Send acknowledgment message about which elements we're looking for
+    element_list = "\n".join([f"- {s}" for s in raw_selectors])
     await update.message.reply_text(
-        f"I'll look for these buttons on the page:\n{button_list}\n\n"
+        f"I'll look for these elements on the page:\n{element_list}\n\n"
         f"Let me verify I can find them..."
     )
 
     # Create monitor instance
     monitor = PageMonitor()
     try:
-        success, button_texts, error = monitor.check_buttons(user_info["url"], user_info["selectors"])
+        success, element_texts, error = monitor.check_elements(user_info["url"], user_info["selectors"])
         if not success:
-            logger.error(f"Initial button check failed for user {chat_id}: {error}")
+            logger.error(f"Initial element check failed for user {chat_id}: {error}")
             await update.message.reply_text(
-                f"Sorry, I couldn't find one or more buttons: {error}\n"
+                f"Sorry, I couldn't find one or more elements: {error}\n"
                 "Please check your selectors and try again with /start"
             )
             return ConversationHandler.END
@@ -189,9 +189,9 @@ async def selectors(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     # Only send success message after we've verified everything works
     await update.message.reply_text(
-        f"Great! I found all the buttons. Monitoring has started!\n"
+        f"Great! I found all the elements. Monitoring has started!\n"
         f"I'll check the page every {interval} seconds and "
-        f"notify you if any button text changes.\n\n"
+        f"notify you if any element text changes or if elements disappear.\n\n"
         f"Use /stop to end monitoring."
     )
 
@@ -224,39 +224,49 @@ async def monitor_page(chat_id: int, url: str, selectors: list, interval: int, b
                 )
                 break
 
-            # Check buttons
-            logger.info(f"Checking buttons for user {chat_id}")
-            success, button_texts, error = monitor.check_buttons(url, selectors)
+            # Check elements
+            logger.info(f"Checking elements for user {chat_id}")
+            success, element_texts, error = monitor.check_elements(url, selectors, allow_missing=True)
             
+            # Handle missing elements (treat as change detection)
+            if success == "missing":
+                logger.info(f"Elements missing for user {chat_id}: {error}")
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=f"Element disappeared! Check the page: {url}\nMissing: {error}"
+                )
+                break
+            
+            # Handle other errors
             if not success:
-                logger.error(f"Button check failed for user {chat_id}: {error}")
+                logger.error(f"Element check failed for user {chat_id}: {error}")
                 await bot.send_message(
                     chat_id=chat_id,
                     text=f"Error monitoring page: {error}"
                 )
                 break
 
-            # Get previous button texts
+            # Get previous element texts
             session = db.get_session(chat_id)
             if not session:
                 logger.info(f"Session not found for user {chat_id}, stopping monitoring")
                 break
 
             # Check for changes
-            logger.info(f"Current button texts for user {chat_id}: {button_texts}")
-            logger.info(f"Previous button texts: {session['last_button_texts']}")
+            logger.info(f"Current element texts for user {chat_id}: {element_texts}")
+            logger.info(f"Previous element texts: {session['last_element_texts']}")
             
-            if monitor.has_changes(session["last_button_texts"], button_texts):
-                logger.info(f"Button text changed for user {chat_id}")
+            if monitor.has_changes(session["last_element_texts"], element_texts):
+                logger.info(f"Element text changed for user {chat_id}")
                 await bot.send_message(
                     chat_id=chat_id,
-                    text=f"Button text changed! Check the page: {url}"
+                    text=f"Element text changed! Check the page: {url}"
                 )
                 break
 
-            # Update stored button texts
-            logger.info(f"Updating button texts for user {chat_id}")
-            db.update_button_texts(chat_id, button_texts)
+            # Update stored element texts
+            logger.info(f"Updating element texts for user {chat_id}")
+            db.update_element_texts(chat_id, element_texts)
             
             logger.info(f"Sleeping for {interval} seconds")
             await asyncio.sleep(interval)

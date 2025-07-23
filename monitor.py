@@ -2,7 +2,7 @@ import os
 import time
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 import cloudscraper
 from bs4 import BeautifulSoup
 import re
@@ -53,8 +53,8 @@ class PageMonitor:
         if self.scraper:
             self.scraper = None
 
-    def check_buttons(self, url: str, selectors: List[str], timeout: int = 30) -> Tuple[bool, Dict[str, str], Optional[str]]:
-        """Check for buttons using cloudscraper."""
+    def check_elements(self, url: str, selectors: List[str], timeout: int = 30, allow_missing: bool = False) -> Tuple[Union[bool, str], Dict[str, str], Optional[str]]:
+        """Check for elements using cloudscraper."""
         if self.should_stop:
             return False, {}, "Operation cancelled by user"
 
@@ -107,7 +107,9 @@ class PageMonitor:
                 logger.info(f"Element with ID: {elem.get('id')} (tag: {elem.name})")
             
             # Find selectors
-            button_texts = {}
+            element_texts = {}
+            missing_elements = []
+            
             for sel in selectors:
                 if self.should_stop:
                     return False, {}, "Operation cancelled by user"
@@ -122,15 +124,15 @@ class PageMonitor:
                     if not element:
                         element = soup.find(lambda tag: tag.get('id', '').lower() == raw_id.lower())
                     
-                    # If still not found, try partial match
-                    if not element:
-                        element = soup.find(lambda tag: tag.get('id', '').lower() in raw_id.lower() or raw_id.lower() in tag.get('id', '').lower())
-                    
                     if not element:
                         logger.error(f"Could not find element with ID: {raw_id}")
-                        logger.info("Page content preview:")
-                        logger.info(soup.prettify()[:1000])  # Log first 1000 chars of HTML
-                        return False, {}, f"Button with ID '{raw_id}' not found"
+                        if not allow_missing:
+                            logger.info("Page content preview:")
+                            logger.info(soup.prettify()[:1000])  # Log first 1000 chars of HTML
+                            return False, {}, f"Element with ID '{raw_id}' not found"
+                        else:
+                            missing_elements.append(sel)
+                            continue
                 
                 # Handle class selectors
                 elif sel.startswith('.'):
@@ -143,12 +145,20 @@ class PageMonitor:
                 
                 if not element:
                     logger.error(f"Could not find element with selector: {sel}")
-                    return False, {}, f"Button with selector '{sel}' not found"
+                    if not allow_missing:
+                        return False, {}, f"Element with selector '{sel}' not found"
+                    else:
+                        missing_elements.append(sel)
+                        continue
                 
-                button_texts[sel] = element.get_text().strip()
-                logger.info(f"Found element {sel}: {button_texts[sel]}")
+                element_texts[sel] = element.get_text().strip()
+                logger.info(f"Found element {sel}: {element_texts[sel]}")
             
-            return True, button_texts, None
+            # If we have missing elements and allow_missing is True, return special status
+            if missing_elements and allow_missing:
+                return "missing", element_texts, f"Missing elements: {', '.join(missing_elements)}"
+            
+            return True, element_texts, None
 
         except cloudscraper.exceptions.CloudflareChallengeError as e:
             logger.error(f"Cloudflare challenge error: {e}")
@@ -160,7 +170,7 @@ class PageMonitor:
             return False, {}, f"Error loading page: {str(e)}"
 
     def has_changes(self, old_texts: Dict[str, str], new_texts: Dict[str, str]) -> bool:
-        """Compare old and new button texts to detect changes."""
+        """Compare old and new element texts to detect changes."""
         if not old_texts:
             return False
         return old_texts != new_texts

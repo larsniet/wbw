@@ -27,7 +27,7 @@ class Database:
                     selectors TEXT NOT NULL,
                     interval INTEGER NOT NULL,
                     start_time TIMESTAMP NOT NULL,
-                    last_button_texts TEXT
+                    last_element_texts TEXT
                 )
             """)
             conn.commit()
@@ -40,7 +40,7 @@ class Database:
             cursor = conn.cursor()
             try:
                 cursor.execute(
-                    "INSERT INTO sessions (chat_id, url, selectors, interval, start_time, last_button_texts) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO sessions (chat_id, url, selectors, interval, start_time, last_element_texts) VALUES (?, ?, ?, ?, ?, ?)",
                     (chat_id, url, json.dumps(selectors), interval, datetime.now().isoformat(), "{}")
                 )
                 conn.commit()
@@ -58,7 +58,7 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT id, url, selectors, interval, start_time, last_button_texts FROM sessions WHERE chat_id = ?",
+                "SELECT id, url, selectors, interval, start_time, last_element_texts FROM sessions WHERE chat_id = ?",
                 (chat_id,)
             )
             row = cursor.fetchone()
@@ -69,15 +69,15 @@ class Database:
                     "selectors": json.loads(row[2]),
                     "interval": row[3],
                     "start_time": row[4],
-                    "last_button_texts": json.loads(row[5] or "{}")
+                    "last_element_texts": json.loads(row[5] or "{}")
                 }
             return None
 
-    def update_button_texts(self, chat_id: int, texts: Dict[str, str]) -> bool:
+    def update_element_texts(self, chat_id: int, texts: Dict[str, str]) -> bool:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "UPDATE sessions SET last_button_texts = ? WHERE chat_id = ?",
+                "UPDATE sessions SET last_element_texts = ? WHERE chat_id = ?",
                 (json.dumps(texts), chat_id)
             )
             return cursor.rowcount > 0
@@ -92,7 +92,7 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT chat_id, url, selectors, interval, start_time, last_button_texts FROM sessions"
+                "SELECT chat_id, url, selectors, interval, start_time, last_element_texts FROM sessions"
             )
             sessions = []
             for row in cursor.fetchall():
@@ -102,6 +102,6 @@ class Database:
                     "selectors": json.loads(row[2]),
                     "interval": row[3],
                     "start_time": row[4],
-                    "last_button_texts": json.loads(row[5] or "{}")
+                    "last_element_texts": json.loads(row[5] or "{}")
                 })
             return sessions 
