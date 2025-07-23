@@ -33,7 +33,7 @@ class Database:
             conn.commit()
 
     def add_session(self, chat_id: int, url: str, selectors: List[str], interval: int) -> bool:
-        if self.get_active_sessions_count() >= 2:
+        if self.get_active_sessions_count() >= 5:
             return False
         
         with self.get_connection() as conn:

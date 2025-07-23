@@ -70,10 +70,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     active_count = db.get_active_sessions_count()
     logger.info(f"Current active sessions: {active_count}")
     
-    if active_count >= 2:
+    if active_count >= 5:
         logger.info(f"Rejecting user {chat_id} due to session limit")
         await update.message.reply_text(
-            "Sorry, the maximum number of active monitoring sessions (2) has been reached. "
+            "Sorry, the maximum number of active monitoring sessions (5) has been reached. "
             "Please try again later."
         )
         return ConversationHandler.END
