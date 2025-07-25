@@ -30,6 +30,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Configuration
+USE_JAVASCRIPT = os.getenv("USE_JAVASCRIPT", "true").lower() == "true"  # Default to JavaScript mode
+logger.info(f"JavaScript mode: {'Enabled' if USE_JAVASCRIPT else 'Disabled'}")
+
 # Initialize FastAPI app
 app = FastAPI()
 
@@ -153,7 +157,7 @@ async def selectors(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
 
     # Create monitor instance
-    monitor = PageMonitor()
+    monitor = PageMonitor(use_javascript=USE_JAVASCRIPT)
     try:
         success, element_texts, error = monitor.check_elements(user_info["url"], user_info["selectors"])
         if not success:
