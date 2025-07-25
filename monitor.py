@@ -106,6 +106,20 @@ class PageMonitor:
             for elem in elements_with_ids:
                 logger.info(f"Element with ID: {elem.get('id')} (tag: {elem.name})")
             
+            # Debug: Look for elements with classes that contain our target classes
+            target_classes = ['BubbleMessage', 'InfoBubble', 'RichText']
+            for target_class in target_classes:
+                matching_elements = soup.find_all(class_=re.compile(target_class))
+                logger.info(f"Found {len(matching_elements)} elements with class containing '{target_class}'")
+                for elem in matching_elements:
+                    logger.info(f"Element classes: {elem.get('class', [])} (tag: {elem.name})")
+            
+            # Debug: Check if page contains any elements with "fully booked" text
+            booked_elements = soup.find_all(string=re.compile("fully booked", re.IGNORECASE))
+            logger.info(f"Found {len(booked_elements)} elements containing 'fully booked' text")
+            for elem in booked_elements:
+                logger.info(f"Text: '{elem.strip()}' in parent: {elem.parent.name if elem.parent else 'None'}")
+            
             # Find selectors
             element_texts = {}
             missing_elements = []
@@ -136,8 +150,8 @@ class PageMonitor:
                 
                 # Handle class selectors
                 elif sel.startswith('.'):
-                    raw_class = unescape_selector(sel)
-                    element = soup.find(class_=raw_class)
+                    # Use CSS selector for proper handling of multiple classes
+                    element = soup.select_one(sel)
                 
                 # Handle other CSS selectors
                 else:
