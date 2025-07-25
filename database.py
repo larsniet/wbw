@@ -30,6 +30,13 @@ class Database:
                     last_element_texts TEXT
                 )
             """)
+            
+            # Check if last_element_texts column exists and add it if it doesn't
+            cursor.execute("PRAGMA table_info(sessions)")
+            columns = [column[1] for column in cursor.fetchall()]
+            if 'last_element_texts' not in columns:
+                cursor.execute("ALTER TABLE sessions ADD COLUMN last_element_texts TEXT DEFAULT '{}'")
+                
             conn.commit()
 
     def add_session(self, chat_id: int, url: str, selectors: List[str], interval: int) -> bool:
