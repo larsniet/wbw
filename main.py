@@ -47,14 +47,29 @@ monitoring_tasks: Dict[int, Tuple[asyncio.Task, PageMonitor]] = {}
 
 def clean_selector(selector: str) -> str:
     """Clean and escape a CSS selector."""
+    # Handle multiple classes for the same element (e.g., ".class1 class2" -> ".class1.class2")
+    if selector.startswith('.') and ' ' in selector and not selector.count(' ') > selector.count('.'):
+        # Check if this looks like multiple classes for the same element
+        parts = selector.split()
+        if all(part.startswith('.') or not part.startswith(('.', '#')) for part in parts):
+            # Convert ".class1 class2" to ".class1.class2" for same-element multiple classes
+            if len(parts) == 2 and not parts[1].startswith('.') and not parts[1].startswith('#'):
+                return f".{parts[0][1:]}.{parts[1]}"
+    
+    # For complex selectors or descendant selectors, don't modify
+    if ' ' in selector and selector.count(' ') > 1:
+        return selector
+    
+    # Original logic for IDs and simple selectors
     if selector.startswith('#') or selector.startswith('.'):
         prefix = selector[0]
         value = selector[1:]
         
         # For IDs, we need to escape special characters in a way that Selenium accepts
+        # But don't escape spaces in class selectors as they might be intentional
         escaped = ''
         for char in value:
-            if char in ' .,()':  # Common special characters in this context
+            if char in '.,()' and selector.startswith('#'):  # Only escape for IDs, not classes
                 escaped += '\\' + char
             else:
                 escaped += char
