@@ -6,6 +6,11 @@ from typing import Dict, List, Optional, Tuple, Union
 import cloudscraper
 from bs4 import BeautifulSoup
 import re
+import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, WebDriverException
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,8 +27,10 @@ def unescape_selector(selector: str) -> str:
     return selector
 
 class PageMonitor:
-    def __init__(self):
+    def __init__(self, use_javascript: bool = False):
         self.scraper = None
+        self.driver = None
+        self.use_javascript = use_javascript
         self.should_stop = False
 
     def stop(self):
@@ -32,6 +39,13 @@ class PageMonitor:
         self.close_driver()
 
     def init_driver(self):
+        """Initialize scraper or browser driver based on mode."""
+        if self.use_javascript:
+            self.init_selenium_driver()
+        else:
+            self.init_cloudscraper()
+
+    def init_cloudscraper(self):
         """Initialize cloudscraper session."""
         self.scraper = cloudscraper.create_scraper(
             browser={
@@ -48,16 +62,122 @@ class PageMonitor:
         )
         logger.info("Initialized cloudscraper session")
 
+    def init_selenium_driver(self):
+        """Initialize undetected Chrome driver for JavaScript execution."""
+        options = uc.ChromeOptions()
+        
+        # Add stealth options to avoid detection
+        options.add_argument('--no-first-run')
+        options.add_argument('--no-service-autorun')
+        options.add_argument('--no-default-browser-check')
+        options.add_argument('--disable-blink-features=AutomationControlled')
+        options.add_argument('--disable-web-security')
+        options.add_argument('--disable-features=VizDisplayCompositor')
+        
+        # Optional: run headless (comment out for debugging)
+        # options.add_argument('--headless')
+        
+        try:
+            self.driver = uc.Chrome(options=options)
+            logger.info("Initialized undetected Chrome driver for JavaScript execution")
+        except Exception as e:
+            logger.error(f"Failed to initialize Chrome driver: {e}")
+            raise
+
     def close_driver(self):
         """Clean up resources."""
         if self.scraper:
             self.scraper = None
+        if self.driver:
+            try:
+                self.driver.quit()
+            except Exception as e:
+                logger.warning(f"Error closing driver: {e}")
+            finally:
+                self.driver = None
 
-    def check_elements(self, url: str, selectors: List[str], timeout: int = 30, allow_missing: bool = False) -> Tuple[Union[bool, str], Dict[str, str], Optional[str]]:
-        """Check for elements using cloudscraper."""
+    def check_elements(self, url: str, selectors: List[str], timeout: int = 30, allow_missing: bool = False, js_wait_time: int = 5) -> Tuple[Union[bool, str], Dict[str, str], Optional[str]]:
+        """Check for elements using cloudscraper or Selenium with JavaScript support."""
         if self.should_stop:
             return False, {}, "Operation cancelled by user"
 
+        if self.use_javascript:
+            return self._check_elements_selenium(url, selectors, timeout, allow_missing, js_wait_time)
+        else:
+            return self._check_elements_cloudscraper(url, selectors, timeout, allow_missing)
+
+    def _check_elements_selenium(self, url: str, selectors: List[str], timeout: int, allow_missing: bool, js_wait_time: int) -> Tuple[Union[bool, str], Dict[str, str], Optional[str]]:
+        """Check elements using Selenium WebDriver with JavaScript execution."""
+        if not self.driver:
+            try:
+                self.init_driver()
+            except Exception as e:
+                return False, {}, f"Failed to initialize driver: {str(e)}"
+
+        try:
+            logger.info(f"Loading {url} with JavaScript support")
+            self.driver.get(url)
+            
+            # Wait for page to load completely
+            WebDriverWait(self.driver, timeout).until(
+                lambda driver: driver.execute_script("return document.readyState") == "complete"
+            )
+            
+            # Additional wait for JavaScript to execute and inject content
+            logger.info(f"Waiting {js_wait_time}s for JavaScript content to load...")
+            time.sleep(js_wait_time)
+            
+            if self.should_stop:
+                return False, {}, "Operation cancelled by user"
+            
+            # Get page source and parse with BeautifulSoup for debugging
+            page_source = self.driver.page_source
+            soup = BeautifulSoup(page_source, 'html.parser')
+            
+            # Debug logging (same as cloudscraper version)
+            self._log_debug_info(soup)
+            
+            # Find elements using Selenium
+            element_texts = {}
+            missing_elements = []
+            
+            for sel in selectors:
+                if self.should_stop:
+                    return False, {}, "Operation cancelled by user"
+                
+                try:
+                    # Wait for element to be present
+                    element = WebDriverWait(self.driver, 10).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, sel))
+                    )
+                    element_text = element.text.strip()
+                    element_texts[sel] = element_text
+                    logger.info(f"Found element {sel}: {element_text}")
+                    
+                except TimeoutException:
+                    logger.error(f"Could not find element with selector: {sel}")
+                    if not allow_missing:
+                        return False, {}, f"Element with selector '{sel}' not found"
+                    else:
+                        missing_elements.append(sel)
+                        continue
+            
+            # Handle missing elements
+            if missing_elements and allow_missing:
+                return "missing", element_texts, f"Missing elements: {', '.join(missing_elements)}"
+            
+            return True, element_texts, None
+
+        except WebDriverException as e:
+            logger.error(f"WebDriver error: {e}")
+            return False, {}, f"WebDriver error: {str(e)}"
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            logger.exception("Full traceback:")
+            return False, {}, f"Error loading page: {str(e)}"
+
+    def _check_elements_cloudscraper(self, url: str, selectors: List[str], timeout: int, allow_missing: bool) -> Tuple[Union[bool, str], Dict[str, str], Optional[str]]:
+        """Check for elements using cloudscraper (original implementation)."""
         if not self.scraper:
             try:
                 self.init_driver()
@@ -100,27 +220,10 @@ class PageMonitor:
             # Parse the HTML
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Debug: Log all elements with IDs
-            elements_with_ids = soup.find_all(id=True)
-            logger.info(f"Found {len(elements_with_ids)} elements with IDs on the page")
-            for elem in elements_with_ids:
-                logger.info(f"Element with ID: {elem.get('id')} (tag: {elem.name})")
+            # Debug logging
+            self._log_debug_info(soup)
             
-            # Debug: Look for elements with classes that contain our target classes
-            target_classes = ['BubbleMessage', 'InfoBubble', 'RichText']
-            for target_class in target_classes:
-                matching_elements = soup.find_all(class_=re.compile(target_class))
-                logger.info(f"Found {len(matching_elements)} elements with class containing '{target_class}'")
-                for elem in matching_elements:
-                    logger.info(f"Element classes: {elem.get('class', [])} (tag: {elem.name})")
-            
-            # Debug: Check if page contains any elements with "fully booked" text
-            booked_elements = soup.find_all(string=re.compile("fully booked", re.IGNORECASE))
-            logger.info(f"Found {len(booked_elements)} elements containing 'fully booked' text")
-            for elem in booked_elements:
-                logger.info(f"Text: '{elem.strip()}' in parent: {elem.parent.name if elem.parent else 'None'}")
-            
-            # Find selectors
+            # Find selectors using BeautifulSoup
             element_texts = {}
             missing_elements = []
             
@@ -148,12 +251,7 @@ class PageMonitor:
                             missing_elements.append(sel)
                             continue
                 
-                # Handle class selectors
-                elif sel.startswith('.'):
-                    # Use CSS selector for proper handling of multiple classes
-                    element = soup.select_one(sel)
-                
-                # Handle other CSS selectors
+                # Handle class selectors and other CSS selectors
                 else:
                     element = soup.select_one(sel)
                 
@@ -182,6 +280,22 @@ class PageMonitor:
             logger.error(f"Unexpected error: {e}")
             logger.exception("Full traceback:")
             return False, {}, f"Error loading page: {str(e)}"
+
+    def _log_debug_info(self, soup: BeautifulSoup):
+        """Log debug information about the page content."""
+        # Debug: Log all elements with IDs
+        elements_with_ids = soup.find_all(id=True)
+        logger.info(f"Found {len(elements_with_ids)} elements with IDs on the page")
+        for elem in elements_with_ids:
+            logger.info(f"Element with ID: {elem.get('id')} (tag: {elem.name})")
+        
+        # Debug: Look for elements with classes that contain common patterns
+        common_classes = ['error', 'alert', 'warning', 'message', 'notification', 'status', 'info']
+        for class_pattern in common_classes:
+            matching_elements = soup.find_all(class_=re.compile(class_pattern, re.IGNORECASE))
+            logger.info(f"Found {len(matching_elements)} elements with class containing '{class_pattern}'")
+            for elem in matching_elements:
+                logger.info(f"Element classes: {elem.get('class', [])} (tag: {elem.name})")
 
     def has_changes(self, old_texts: Dict[str, str], new_texts: Dict[str, str]) -> bool:
         """Compare old and new element texts to detect changes."""
