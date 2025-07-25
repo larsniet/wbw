@@ -6,11 +6,14 @@ A Telegram bot that monitors web pages for element text changes. The bot can han
 
 - Monitor web pages for element text changes
 - Support for multiple CSS selectors
+- **Two monitoring modes**:
+  - **Fast mode**: Static HTML parsing with Cloudflare bypass (cloudscraper)
+  - **JavaScript mode**: Full browser execution for dynamic content (undetected Chrome)
 - Fixed 60-second refresh interval
 - Automatic session timeout after 12 hours
-- Concurrent monitoring for up to 2 users
-- Cloudflare bypass using cloudscraper
-- Docker support with health check endpoint
+- Concurrent monitoring for up to 5 users
+- Docker support with headless Chrome
+- Health check endpoint
 
 ## Prerequisites
 
@@ -25,9 +28,15 @@ git clone <repository-url>
 cd <repository-name>
 ```
 
-2. Create a `.env` file with your Telegram Bot Token:
+2. Create a `.env` file with your configuration:
 ```bash
+# Required: Your Telegram Bot Token
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+
+# Optional: Enable JavaScript execution (default: true)
+# Set to "false" for faster static HTML parsing
+# Set to "true" for dynamic content that loads via JavaScript
+USE_JAVASCRIPT=true
 ```
 
 3. Build and run the container using Docker Compose:

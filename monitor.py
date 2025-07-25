@@ -66,7 +66,10 @@ class PageMonitor:
         """Initialize undetected Chrome driver for JavaScript execution."""
         options = uc.ChromeOptions()
         
-        # Add stealth options to avoid detection
+        # Detect if running in Docker/CI environment
+        is_docker = os.path.exists('/.dockerenv') or os.getenv('DISPLAY') == ':99'
+        
+        # Basic Chrome options
         options.add_argument('--no-first-run')
         options.add_argument('--no-service-autorun')
         options.add_argument('--no-default-browser-check')
@@ -74,12 +77,28 @@ class PageMonitor:
         options.add_argument('--disable-web-security')
         options.add_argument('--disable-features=VizDisplayCompositor')
         
-        # Optional: run headless (comment out for debugging)
-        # options.add_argument('--headless')
+        # Docker/Headless specific options
+        if is_docker:
+            logger.info("Detected Docker environment - configuring for headless operation")
+            options.add_argument('--headless=new')  # Use new headless mode
+            options.add_argument('--no-sandbox')
+            options.add_argument('--disable-dev-shm-usage')
+            options.add_argument('--disable-gpu')
+            options.add_argument('--disable-software-rasterizer')
+            options.add_argument('--disable-background-timer-throttling')
+            options.add_argument('--disable-backgrounding-occluded-windows')
+            options.add_argument('--disable-renderer-backgrounding')
+            options.add_argument('--disable-features=TranslateUI')
+            options.add_argument('--disable-ipc-flooding-protection')
+            options.add_argument('--window-size=1920,1080')
+        else:
+            logger.info("Detected local environment - running with visible browser")
+            # For local development, don't run headless by default for easier debugging
+            # options.add_argument('--headless=new')  # Uncomment to force headless locally
         
         try:
             self.driver = uc.Chrome(options=options)
-            logger.info("Initialized undetected Chrome driver for JavaScript execution")
+            logger.info(f"Initialized undetected Chrome driver ({'headless' if is_docker else 'visible'} mode)")
         except Exception as e:
             logger.error(f"Failed to initialize Chrome driver: {e}")
             raise
